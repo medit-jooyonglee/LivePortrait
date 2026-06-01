@@ -74,7 +74,7 @@ class LivePortraitPipeline(object):
 
         return template_dct
 
-    def execute(self, args: ArgumentConfig):
+    def execute(self, args: ArgumentConfig, write_image:bool=True, src_image=None, driving_image:np.ndarray=None):
         # for convenience
         inf_cfg = self.live_portrait_wrapper.inference_cfg
         device = self.live_portrait_wrapper.device
@@ -85,7 +85,7 @@ class LivePortraitPipeline(object):
         source_fps = None
         if is_image(args.source):
             flag_is_source_video = False
-            img_rgb = load_image_rgb(args.source)
+            img_rgb = load_image_rgb(args.source) if src_image is None else src_image
             img_rgb = resize_to_limit(img_rgb, inf_cfg.source_max_dim, inf_cfg.source_division)
             log(f"Load source image from {args.source}")
             source_rgb_lst = [img_rgb]
@@ -125,16 +125,16 @@ class LivePortraitPipeline(object):
             if args.flag_crop_driving_video:
                 log("Warning: flag_crop_driving_video is True, but the driving info is a template, so it is ignored.")
 
-        elif osp.exists(args.driving):
+        elif osp.exists(args.driving) or driving_image is not None:
             if is_video(args.driving):
                 flag_is_driving_video = True
                 # load from video file, AND make motion template
                 output_fps = int(get_fps(args.driving))
                 log(f"Load driving video from: {args.driving}, FPS is {output_fps}")
                 driving_rgb_lst = load_video(args.driving)
-            elif is_image(args.driving):
+            elif is_image(args.driving) or driving_image is not None:
                 flag_is_driving_video = False
-                driving_img_rgb = load_image_rgb(args.driving)
+                driving_img_rgb = load_image_rgb(args.driving) if driving_image is None else driving_image
                 output_fps = 25
                 log(f"Load driving image from {args.driving}")
                 driving_rgb_lst = [driving_img_rgb]
@@ -168,6 +168,10 @@ class LivePortraitPipeline(object):
             driving_template_dct = self.make_motion_template(I_d_lst, c_d_eyes_lst, c_d_lip_lst, output_fps=output_fps)
 
             wfp_template = remove_suffix(args.driving) + '.pkl'
+            base_name = os.path.basename(wfp_template)
+            temp_save_path = 'outputs/results'
+            os.makedirs(temp_save_path, exist_ok=True)
+            wfp_template = os.path.join(temp_save_path, base_name)
             dump(wfp_template, driving_template_dct)
             log(f"Dump motion template to {wfp_template}")
         else:
@@ -451,6 +455,8 @@ class LivePortraitPipeline(object):
 
         mkdir(args.output_dir)
         wfp_concat = None
+        
+        image_lists = [*I_p_lst]
         ######### build the final concatenation result #########
         # driving frame | source frame | generation
         if flag_is_source_video and flag_is_driving_video:
@@ -461,6 +467,7 @@ class LivePortraitPipeline(object):
             else:
                 frames_concatenated = concat_frames(driving_rgb_crop_256x256_lst*n_frames, img_crop_256x256_lst, I_p_lst)
         else:
+            # all-image-case
             frames_concatenated = concat_frames(driving_rgb_crop_256x256_lst, [img_crop_256x256], I_p_lst)
 
         if flag_is_driving_video or (flag_is_source_video and not flag_is_driving_video):
@@ -504,15 +511,19 @@ class LivePortraitPipeline(object):
             log(f'Animated video: {wfp}')
             log(f'Animated video with concat: {wfp_concat}')
         else:
-            wfp_concat = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}_concat.jpg')
-            cv2.imwrite(wfp_concat, frames_concatenated[0][..., ::-1])
-            wfp = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}.jpg')
-            if I_p_pstbk_lst is not None and len(I_p_pstbk_lst) > 0:
-                cv2.imwrite(wfp, I_p_pstbk_lst[0][..., ::-1])
+            if write_image:
+                wfp_concat = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}_concat.jpg')
+                cv2.imwrite(wfp_concat, frames_concatenated[0][..., ::-1])
+                wfp = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}.jpg')
+                if I_p_pstbk_lst is not None and len(I_p_pstbk_lst) > 0:
+                    cv2.imwrite(wfp, I_p_pstbk_lst[0][..., ::-1])
+                else:
+                    cv2.imwrite(wfp, frames_concatenated[0][..., ::-1])
+                # final log
+                log(f'Animated image: {wfp}')
+                log(f'Animated image with concat: {wfp_concat}')
             else:
-                cv2.imwrite(wfp, frames_concatenated[0][..., ::-1])
-            # final log
-            log(f'Animated image: {wfp}')
-            log(f'Animated image with concat: {wfp_concat}')
+                wfp_concat = None
+                wfp = None
 
-        return wfp, wfp_concat
+        return wfp, wfp_concat, image_lists
