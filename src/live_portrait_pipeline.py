@@ -474,20 +474,22 @@ class LivePortraitPipeline(object):
             flag_source_has_audio = flag_is_source_video and has_audio_stream(args.source)
             flag_driving_has_audio = (not flag_load_from_template) and has_audio_stream(args.driving)
 
-            wfp_concat = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}_concat.mp4')
-
+            
+            wfp_concat_write = getattr(args, 'wfp_concat_write', True)
             # NOTE: update output fps
-            output_fps = source_fps if flag_is_source_video else output_fps
-            images2video(frames_concatenated, wfp=wfp_concat, fps=output_fps)
+            if wfp_concat_write:
+                wfp_concat = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}_concat.mp4')
+                output_fps = source_fps if flag_is_source_video else output_fps
+                images2video(frames_concatenated, wfp=wfp_concat, fps=output_fps)
 
-            if flag_source_has_audio or flag_driving_has_audio:
-                # final result with concatenation
-                wfp_concat_with_audio = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}_concat_with_audio.mp4')
-                audio_from_which_video = args.driving if ((flag_driving_has_audio and args.audio_priority == 'driving') or (not flag_source_has_audio)) else args.source
-                log(f"Audio is selected from {audio_from_which_video}, concat mode")
-                add_audio_to_video(wfp_concat, audio_from_which_video, wfp_concat_with_audio)
-                os.replace(wfp_concat_with_audio, wfp_concat)
-                log(f"Replace {wfp_concat_with_audio} with {wfp_concat}")
+                if flag_source_has_audio or flag_driving_has_audio:
+                    # final result with concatenation
+                    wfp_concat_with_audio = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}_concat_with_audio.mp4')
+                    audio_from_which_video = args.driving if ((flag_driving_has_audio and args.audio_priority == 'driving') or (not flag_source_has_audio)) else args.source
+                    log(f"Audio is selected from {audio_from_which_video}, concat mode")
+                    add_audio_to_video(wfp_concat, audio_from_which_video, wfp_concat_with_audio)
+                    os.replace(wfp_concat_with_audio, wfp_concat)
+                    log(f"Replace {wfp_concat_with_audio} with {wfp_concat}")
 
             # save the animated result
             wfp = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}.mp4')

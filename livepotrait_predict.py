@@ -109,7 +109,7 @@ def parse_args():
                    help="Normalize lip to closed state before animation")
     p.add_argument("--eye-retargeting", action="store_true",
                    help="Transfer eye-open ratio from driving to source (WIP)")
-    p.add_argument("--lip-retargeting", action="store_true", default=True,
+    p.add_argument("--lip-retargeting", action="store_true", default=False,
                    help="Transfer lip-open ratio from driving to source (WIP)")
 
     # Audio
@@ -208,24 +208,38 @@ def get_model() -> LivePortraitPipeline:
     return g_model
 
 
-def predict(src_img, driving_img, driving_multiplier = 1.2):
+def predict(src_img, driving_img, 
+            args:ArgumentConfig=None,
+            inference_config:InferenceConfig=None, **kwargs):
     try:
         pipeline = get_model()
     except Exception as e:
         print(f"Error loading model: {e}")
         pass
         # return None, None, None
-    args, inference_cfg, crop_cfg = get_config()
+    if args is None:
+        args, inference_cfg, crop_cfg = get_config()
     
     
-    pipeline.live_portrait_wrapper.inference_cfg.driving_multiplier = driving_multiplier
+    # pipeline.live_portrait_wrapper.inference_cfg.driving_multiplier = driving_multiplier
+    if inference_config is not None:
+        if isinstance(inference_config, dict):
+            for key, value in inference_config.items():
+                if hasattr(pipeline.live_portrait_wrapper.inference_cfg, key):
+                    print(f"Set inference config: {key} = {value}")
+                else:
+                    # setattr(pipeline.live_portrait_wrapper.inference_cfg, key, value)
+                    print(f"Warning: unknown inference config key: {key}, setting anyway")
+                setattr(pipeline.live_portrait_wrapper.inference_cfg, key, value)
+            # inference_config = _partial(InferenceConfig, inference_config)
+        # pipeline.live_portrait_wrapper.inference_cfg = inference_config
     # pinpeline.live_portrait_wrapper.inference_cfg.driving_option = "pose-friendly"
     wfp, wfp_concat, image_lists = pipeline.execute(args, 
                                                     write_image=False, 
                                                     src_image=src_img, 
                                                     driving_image=driving_img)
     
-    return image_lists[0]
+    return image_lists[0], (wfp, wfp_concat)
     
 
 def main():
@@ -325,14 +339,15 @@ def concatenate_results(image_lists, refer_index=-1, axis=1):
 def predict_main():
     
     # src_image_file = 'liveportrait/res--d30.jpg'
-    src_image_file = 'E:/temp/dataset/samples/teeth01.jpg'
+    src_image_file = 'E:/temp/dataset/samples/teeth03.png'
     test_src_image_files = []
     
     src_image_files = glob.glob('E:/temp/dataset/samples/*.*')
     # target_image_file = 'liveportrait/res--smile01.jpg'
-    target_image_file = 'E:/temp/dataset/closed/refer01.png'
+    # target_image_file = 'E:/temp/dataset/closed/refer01.png'
+    target_image_file = 'samples/img02.png'
     target_image_file2 = 'E:/temp/dataset/opend_good/good03.jpg'
-    
+    # 'D:\workspace\repositories\iSmileNet\liveportrait/'
     # hidden-middle-image
     driving_img = load_image_rgb(target_image_file)
     driving_img2 = load_image_rgb(target_image_file2)
@@ -340,16 +355,56 @@ def predict_main():
             # print(f"Processing {src_image_file} with driving {target_image_file}...")
         src_img = load_image_rgb(src_image_file)
         
-        res = predict(src_img, driving_img, driving_multiplier=1.2)
+        infer_config = {
+            'driving_multiplier': 1.0,
+            'flag_lip_retargeting': True,
+        }
+        # res, (wfp, _) = predict(src_img, driving_img, 
+        #               args=None, inference_config=infer_config)
+        # cv2.imwrite('temp.png', res[..., ::-1])
+        # infer_config['flag_lip_retargeting'] = False
+        # res2, (wfp, _) = predict(res, driving_img2, 
+        #         args=None, inference_config=infer_config)
+        # # cv2.imwrite('temp2.png', src_img[..., ::-1])
+        # cv2.imwrite('temp2.png', res2[..., ::-1])
+        res = src_img
         
-        res2 = predict(res, driving_img2)
-        concatenated = concatenate_results([src_img, res, res2], refer_index=0)
+        
+        # driving_video = 'D:/workspace/repositories/iSmileNet/liveportrait/assets/examples/driving/d18.mp4'
+        
+        driving_video = 'C:/Users/medit/Downloads/smile_video.mp4'
+        
+        ####
+        
+        if True:
+            
+            try:
+                pipeline = get_model()
+            except Exception as e:
+                print(f"Error loading model: {e}")
+                pass
+                # return None, None, None
+            args, inference_cfg, crop_cfg = get_config()
+            
+            args.driving = driving_video
+            args.output_dir = 'temp/results'
+            args.wfp_concat_write = False
+            os.makedirs(args.output_dir, exist_ok=True)
+            pipeline.live_portrait_wrapper.inference_cfg.driving_multiplier = 1.0
+            pipeline.live_portrait_wrapper.inference_cfg.flag_lip_retargeting = False
+            
+            # pinpeline.live_portrait_wrapper.inference_cfg.driving_option = "pose-friendly"
+            wfp, wfp_concat, image_lists = pipeline.execute(args, 
+                                                            
+                                                            src_image=res, 
+                                                            )
+            
         # load_image_rgb
-        # import cv2
-        fname = os.path.splitext(os.path.basename(src_image_file))[0]
-        cv2.imwrite(f'{fname}_res1.png', res[..., ::-1])
-        cv2.imwrite(f'{fname}_res2.png', res2[..., ::-1])
-        cv2.imwrite(f'{fname}_res_concat.png', concatenated[..., ::-1])
+        # # import cv2
+        # fname = os.path.splitext(os.path.basename(src_image_file))[0]
+        # cv2.imwrite(f'{fname}_res1.png', res[..., ::-1])
+        # cv2.imwrite(f'{fname}_res2.png', res2[..., ::-1])
+        # cv2.imwrite(f'{fname}_res_concat.png', concatenated[..., ::-1])
         
     
     
