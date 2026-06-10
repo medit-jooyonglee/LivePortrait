@@ -38,6 +38,7 @@ import sys
 import argparse
 import subprocess
 import numpy as np
+from sklearn import pipeline
 # ensure imports resolve from this file's directory
 
 
@@ -208,7 +209,17 @@ def get_model() -> LivePortraitPipeline:
     return g_model
 
 
+def update_config(dest_config, new_config):
+    if isinstance(new_config, dict):
+        for key, value in new_config.items():
+            if hasattr(dest_config, key):
+                print(f"Set inference config: {key} = {value}")
+            else:
+                print(f"Warning: unknown inference config key: {key}, setting anyway")
+            setattr(dest_config, key, value)
+            
 def predict(src_img, driving_img, 
+        
             args:ArgumentConfig=None,
             inference_config:InferenceConfig=None, **kwargs):
     try:
@@ -217,24 +228,29 @@ def predict(src_img, driving_img,
         print(f"Error loading model: {e}")
         pass
         # return None, None, None
-    if args is None:
-        args, inference_cfg, crop_cfg = get_config()
+    # if args is None:
+    default_args, inference_cfg, crop_cfg = get_config()
+    if args is not None:
+        update_config(default_args, args)
+        
     
+    # driving_img
     
     # pipeline.live_portrait_wrapper.inference_cfg.driving_multiplier = driving_multiplier
     if inference_config is not None:
-        if isinstance(inference_config, dict):
-            for key, value in inference_config.items():
-                if hasattr(pipeline.live_portrait_wrapper.inference_cfg, key):
-                    print(f"Set inference config: {key} = {value}")
-                else:
-                    # setattr(pipeline.live_portrait_wrapper.inference_cfg, key, value)
-                    print(f"Warning: unknown inference config key: {key}, setting anyway")
-                setattr(pipeline.live_portrait_wrapper.inference_cfg, key, value)
+        update_config(pipeline.live_portrait_wrapper.inference_cfg, inference_config)
+        # if isinstance(inference_config, dict):
+        #     for key, value in inference_config.items():
+        #         if hasattr(pipeline.live_portrait_wrapper.inference_cfg, key):
+        #             print(f"Set inference config: {key} = {value}")
+        #         else:
+        #             # setattr(pipeline.live_portrait_wrapper.inference_cfg, key, value)
+        #             print(f"Warning: unknown inference config key: {key}, setting anyway")
+        #         setattr(pipeline.live_portrait_wrapper.inference_cfg, key, value)
             # inference_config = _partial(InferenceConfig, inference_config)
         # pipeline.live_portrait_wrapper.inference_cfg = inference_config
     # pinpeline.live_portrait_wrapper.inference_cfg.driving_option = "pose-friendly"
-    wfp, wfp_concat, image_lists = pipeline.execute(args, 
+    wfp, wfp_concat, image_lists = pipeline.execute(default_args, 
                                                     write_image=False, 
                                                     src_image=src_img, 
                                                     driving_image=driving_img)

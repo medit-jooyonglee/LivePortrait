@@ -12,6 +12,7 @@ import numpy as np
 import os
 import os.path as osp
 from rich.progress import track
+import time
 
 from .config.argument_config import ArgumentConfig
 from .config.inference_config import InferenceConfig
@@ -491,8 +492,9 @@ class LivePortraitPipeline(object):
                     os.replace(wfp_concat_with_audio, wfp_concat)
                     log(f"Replace {wfp_concat_with_audio} with {wfp_concat}")
 
+            time_stamp = time.strftime('%Y%m%d%H%M%S')
             # save the animated result
-            wfp = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}.mp4')
+            wfp = osp.join(args.output_dir, f'{basename(args.source)}--{basename(args.driving)}_{time_stamp}.mp4')
             if I_p_pstbk_lst is not None and len(I_p_pstbk_lst) > 0:
                 images2video(I_p_pstbk_lst, wfp=wfp, fps=output_fps)
             else:
